@@ -1,7 +1,14 @@
+import { setDefaultResultOrder } from "node:dns";
 import type { Lead, ICP, ScoreResult } from "./types.js";
+
+// Works around an undici (Node's fetch) connect-timeout flakiness seen
+// against api.typesafe.ai's Cloudflare edge — curl was unaffected, only
+// Node's fetch; forcing IPv4-first DNS resolution fixes it.
+setDefaultResultOrder("ipv4first");
 
 const JEV_API_KEY = process.env.JEV_API_KEY;
 const JEV_API_URL = process.env.JEV_API_URL ?? "https://api.typesafe.ai/v1/systemone";
+const MAX_RETRIES = 2;
 
 const CATEGORY_BASE_SCORE: Record<string, number> = {
   "strong-match": 85,
@@ -22,46 +29,7 @@ export async function scoreLead(lead: Lead, icp: ICP): Promise<ScoreResult> {
   }
 
   try {
-    const res = await fetch(JEV_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${JEV_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "jev-latest",
-        state: {
-          lead_name: lead.name,
-          lead_title: lead.title,
-          company: lead.company,
-          company_size: lead.companySize,
-          industry: lead.industry,
-          is_decision_maker: String(lead.isDecisionMaker),
-          has_active_ai_project: String(lead.hasActiveAIProject),
-          icp_target_sizes: icp.targetCompanySizes.join(", "),
-          icp_target_industries: icp.targetIndustries.join(", "),
-          icp_requires_decision_maker: String(icp.requireDecisionMaker),
-        },
-        questions: {
-          match_category: {
-            type: "choice",
-            instructions: "Given this lead's profile and the target ICP, how good a match is this lead?",
-            criteria: {
-              "strong-match": "Company size and industry fit the ICP, and the role satisfies the decision-maker requirement.",
-              "possible-match": "Partially fits the ICP (e.g. right industry but borderline size, or role unclear).",
-              "poor-match": "Does not fit the ICP on size, industry, or decision-maker requirement.",
-            },
-          },
-        },
-      }),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Jev API error: ${res.status} ${res.statusText}`);
-    }
-
-    const data = await res.json();
+    const data = await fetchWithRetry(lead, icp);
     const answer = data.answers?.match_category;
     if (!answer?.choice) {
       throw new Error(`Unexpected Jev response shape: ${JSON.stringify(data)}`);
@@ -85,8 +53,89 @@ export async function scoreLead(lead: Lead, icp: ICP): Promise<ScoreResult> {
   }
 }
 
+async function fetchWithRetry(lead: Lead, icp: ICP): Promise<any> {
+  let lastErr: Error | undefined;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(JEV_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${JEV_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "jev-latest",
+          state: {
+            lead_name: lead.name,
+            lead_title: lead.title,
+            company: lead.company,
+            company_size: lead.companySize,
+            industry: lead.industry,
+            is_decision_maker: String(lead.isDecisionMaker),
+            has_active_ai_project: String(lead.hasActiveAIProject),
+            icp_target_sizes: icp.targetCompanySizes.join(", "),
+            icp_target_industries: icp.targetIndustries.join(", "),
+            icp_requires_decision_maker: String(icp.requireDecisionMaker),
+          },
+          questions: {
+            match_category: {
+              type: "choice",
+              instructions: "Given this lead's profile and the target ICP, how good a match is this lead?",
+              criteria: {
+                "strong-match": "Company size and industry fit the ICP, and the role satisfies the decision-maker requirement.",
+                "possible-match": "Partially fits the ICP (e.g. right industry but borderline size, or role unclear).",
+                "poor-match": "Does not fit the ICP on size, industry, or decision-maker requirement.",
+              },
+            },
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Jev API error: ${res.status} ${res.statusText}`);
+      }
+      return await res.json();
+    } catch (err) {
+      lastErr = err as Error;
+      if (attempt < MAX_RETRIES) {
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 export async function scoreLeads(leads: Lead[], icp: ICP): Promise<ScoreResult[]> {
   return Promise.all(leads.map((lead) => scoreLead(lead, icp)));
+}
+
+/**
+ * Scores many leads with bounded concurrency so we don't fire thousands of
+ * parallel requests at once (rate limits, shared hackathon key).
+ */
+export async function scoreLeadsBatched(
+  leads: Lead[],
+  icp: ICP,
+  concurrency = 20,
+  onProgress?: (done: number, total: number) => void
+): Promise<ScoreResult[]> {
+  const results: ScoreResult[] = new Array(leads.length);
+  let next = 0;
+  let done = 0;
+
+  async function worker() {
+    while (next < leads.length) {
+      const i = next++;
+      results[i] = await scoreLead(leads[i], icp);
+      done++;
+      onProgress?.(done, leads.length);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, leads.length) }, worker));
+  return results;
 }
 
 function deriveMatchReasons(lead: Lead, icp: ICP): string[] {

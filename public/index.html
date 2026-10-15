@@ -105,6 +105,19 @@
   .shortlist-btn.on { border-color: var(--strong); color: var(--strong); background: rgba(61,220,132,.1); }
   .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 60px 0; }
   .source-tag { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; display: inline-block; margin-top: 6px; }
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #0e1016;
+  }
+  .stat { text-align: center; }
+  .stat .v { font-size: 18px; font-weight: 700; }
+  .stat .l { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -129,6 +142,7 @@
       </label>
 
       <button class="run" id="run-btn">Score leads</button>
+      <button class="run" id="run-bulk-btn" style="margin-top:8px; background:#1b1f2d; color:var(--text); border:1px solid var(--border);">Score all 1000 (stress test)</button>
     </div>
 
     <div class="panel">
@@ -136,6 +150,7 @@
         <h2 style="margin:0">Leads</h2>
         <span class="count" id="count"></span>
       </div>
+      <div class="stats-bar" id="stats-bar" hidden></div>
       <div class="leads" id="leads">
         <div class="empty">Define your ICP and click "Score leads" to begin.</div>
       </div>
@@ -144,28 +159,55 @@
 </div>
 
 <script>
+  // Industries grounded in TrueHorizon.ai's actual public case studies
+  // (truehorizon.ai/customers) — they sell across many enterprise verticals,
+  // not one niche. Chips below are fully editable; this is just the default.
   const SAMPLE_LEADS = [
-    { id: "L1", name: "A. Rivera", title: "VP Engineering", company: "Northstar Labs", companySize: "51-200", industry: "AI/ML", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L2", name: "B. Chen", title: "Head of Product", company: "Cedar Cloud", companySize: "201-1000", industry: "Cloud Infra", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L3", name: "C. Patel", title: "Marketing Associate", company: "Brightline Media", companySize: "11-50", industry: "Media", isDecisionMaker: false, hasActiveAIProject: false },
-    { id: "L4", name: "D. Nwosu", title: "CTO", company: "Fenwick Robotics", companySize: "11-50", industry: "Robotics", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L5", name: "E. Fontaine", title: "Data Scientist", company: "Cedar Cloud", companySize: "201-1000", industry: "Cloud Infra", isDecisionMaker: false, hasActiveAIProject: true },
-    { id: "L6", name: "F. Osei", title: "Founder & CEO", company: "Lumen Health AI", companySize: "1-10", industry: "AI/ML", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L7", name: "G. Takahashi", title: "Procurement Manager", company: "Delta Logistics", companySize: "1000+", industry: "Logistics", isDecisionMaker: false, hasActiveAIProject: false },
-    { id: "L8", name: "H. Okafor", title: "Director of Engineering", company: "Vireo Robotics", companySize: "51-200", industry: "Robotics", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L1", name: "A. Rivera", title: "VP Tax Technology", company: "Meridian Tax Solutions", companySize: "1000+", industry: "Tax & Compliance", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L2", name: "B. Chen", title: "Head of Localization", company: "Polyglot Media Group", companySize: "201-1000", industry: "Media & Localization", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L3", name: "C. Patel", title: "Recruiting Coordinator", company: "Brightline Staffing", companySize: "11-50", industry: "Recruitment & Staffing", isDecisionMaker: false, hasActiveAIProject: false },
+    { id: "L4", name: "D. Nwosu", title: "Director of Procurement", company: "Fenwick Supply Co.", companySize: "1000+", industry: "Procurement & Supply Chain", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L5", name: "E. Fontaine", title: "VP Operations", company: "Highline Entertainment Venues", companySize: "201-1000", industry: "Entertainment & Hospitality", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L6", name: "F. Osei", title: "Head of AI Automation", company: "Garrison Financial Group", companySize: "1000+", industry: "Financial Services", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L7", name: "G. Takahashi", title: "Customer Support Rep", company: "Pawfect Goods Co.", companySize: "201-1000", industry: "Consumer & eCommerce", isDecisionMaker: false, hasActiveAIProject: false },
+    { id: "L8", name: "H. Okafor", title: "Chief Operating Officer", company: "Vireo Enterprise Software", companySize: "1000+", industry: "Enterprise SaaS", isDecisionMaker: true, hasActiveAIProject: true },
   ];
 
   const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"];
-  const INDUSTRIES = ["AI/ML", "Cloud Infra", "Robotics", "Media", "Fintech", "Healthcare"];
-  const DEFAULT_SIZES = ["11-50", "51-200", "201-1000"];
-  const DEFAULT_INDUSTRIES = ["AI/ML", "Cloud Infra", "Robotics"];
+  const INDUSTRIES = ["Tax & Compliance", "Media & Localization", "Recruitment & Staffing", "Procurement & Supply Chain", "Entertainment & Hospitality", "Financial Services", "Consumer & eCommerce", "Enterprise SaaS"];
+  const DEFAULT_SIZES = ["201-1000", "1000+"];
+  const DEFAULT_INDUSTRIES = ["Tax & Compliance", "Media & Localization", "Recruitment & Staffing", "Procurement & Supply Chain", "Entertainment & Hospitality", "Financial Services", "Enterprise SaaS"];
 
   const sizeChips = document.getElementById("size-chips");
   const industryChips = document.getElementById("industry-chips");
   const leadsEl = document.getElementById("leads");
   const countEl = document.getElementById("count");
+  const statsBar = document.getElementById("stats-bar");
   const runBtn = document.getElementById("run-btn");
+  const runBulkBtn = document.getElementById("run-bulk-btn");
   const shortlisted = new Set();
+
+  function currentICP() {
+    return {
+      targetCompanySizes: activeValues(sizeChips),
+      targetIndustries: activeValues(industryChips),
+      requireDecisionMaker: document.getElementById("requireDecisionMaker").checked,
+    };
+  }
+
+  function renderStats(leads, scores, elapsedSec) {
+    const strong = scores.filter((s) => s.category === "strong-match").length;
+    const possible = scores.filter((s) => s.category === "possible-match").length;
+    const poor = scores.filter((s) => s.category === "poor-match").length;
+    const rate = (leads.length / elapsedSec).toFixed(1);
+    statsBar.hidden = false;
+    statsBar.innerHTML = `
+      <div class="stat"><div class="v">${leads.length}</div><div class="l">Leads scored</div></div>
+      <div class="stat"><div class="v">${elapsedSec.toFixed(1)}s</div><div class="l">${rate}/sec</div></div>
+      <div class="stat" style="color:var(--strong)"><div class="v">${strong}</div><div class="l">Strong match</div></div>
+      <div class="stat"><div class="v">${possible} / ${poor}</div><div class="l">Possible / Poor</div></div>
+    `;
+  }
 
   function makeChips(container, values, defaults) {
     values.forEach((v) => {
@@ -184,14 +226,23 @@
     return [...container.querySelectorAll(".chip.active")].map((c) => c.dataset.value);
   }
 
-  function renderLeads(leads, scores) {
+  function renderLeads(leads, scores, capAt = 200) {
     leadsEl.innerHTML = "";
     const byId = Object.fromEntries(scores.map((s) => [s.leadId, s]));
     const sorted = [...leads].sort((a, b) => (byId[b.id]?.score ?? 0) - (byId[a.id]?.score ?? 0));
 
     countEl.textContent = `${leads.length} leads scored`;
 
-    sorted.forEach((lead) => {
+    const shown = sorted.slice(0, capAt);
+    if (sorted.length > capAt) {
+      const note = document.createElement("div");
+      note.className = "empty";
+      note.style.padding = "0 0 10px";
+      note.textContent = `Showing top ${capAt} of ${sorted.length} by score — see the stats above for full breakdown.`;
+      leadsEl.appendChild(note);
+    }
+
+    shown.forEach((lead) => {
       const s = byId[lead.id];
       const card = document.createElement("div");
       card.className = "lead-card";
@@ -224,12 +275,10 @@
   runBtn.addEventListener("click", async () => {
     runBtn.disabled = true;
     runBtn.textContent = "Scoring…";
+    statsBar.hidden = true;
 
-    const icp = {
-      targetCompanySizes: activeValues(sizeChips),
-      targetIndustries: activeValues(industryChips),
-      requireDecisionMaker: document.getElementById("requireDecisionMaker").checked,
-    };
+    const icp = currentICP();
+    const start = performance.now();
 
     try {
       const res = await fetch("/api/score-leads", {
@@ -239,12 +288,51 @@
       });
       if (!res.ok) throw new Error((await res.json()).message || res.statusText);
       const scores = await res.json();
+      renderStats(SAMPLE_LEADS, scores, (performance.now() - start) / 1000);
       renderLeads(SAMPLE_LEADS, scores);
     } catch (err) {
       leadsEl.innerHTML = `<div class="empty" style="color:var(--poor)">Error: ${err.message}</div>`;
     } finally {
       runBtn.disabled = false;
       runBtn.textContent = "Score leads";
+    }
+  });
+
+  runBulkBtn.addEventListener("click", async () => {
+    runBulkBtn.disabled = true;
+    runBtn.disabled = true;
+    statsBar.hidden = true;
+    leadsEl.innerHTML = `<div class="empty" id="bulk-status">Loading 1000 leads…</div>`;
+
+    const icp = currentICP();
+    const start = performance.now();
+    const statusEl = document.getElementById("bulk-status");
+    const tick = setInterval(() => {
+      if (statusEl) statusEl.textContent = `Scoring 1000 leads against your ICP… ${((performance.now() - start) / 1000).toFixed(1)}s`;
+    }, 100);
+
+    try {
+      const leadsRes = await fetch("/api/leads/generated");
+      if (!leadsRes.ok) throw new Error((await leadsRes.json()).error || leadsRes.statusText);
+      const leads = await leadsRes.json();
+
+      const res = await fetch("/api/score-leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads, icp }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || res.statusText);
+      const scores = await res.json();
+
+      clearInterval(tick);
+      renderStats(leads, scores, (performance.now() - start) / 1000);
+      renderLeads(leads, scores, 200);
+    } catch (err) {
+      clearInterval(tick);
+      leadsEl.innerHTML = `<div class="empty" style="color:var(--poor)">Error: ${err.message}</div>`;
+    } finally {
+      runBulkBtn.disabled = false;
+      runBtn.disabled = false;
     }
   });
 </script>
