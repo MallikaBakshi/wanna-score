@@ -218,6 +218,19 @@
   let lastLeads = [];
   let lastScores = [];
 
+  // We have no verified email for any lead (synthetic data has none; real
+  // Crustdata pulls only returned a has_business_email boolean, not the
+  // address itself — that needs a separate paid reveal call). This infers a
+  // plausible address so the mailto link has a "to" — clearly labeled
+  // "inferred, unverified" in the UI, never presented as confirmed.
+  function inferEmail(lead) {
+    const parts = lead.name.toLowerCase().replace(/[^a-z\s.]/g, "").split(/\s+/).filter(Boolean);
+    const first = (parts[0] || "contact").replace(/\.$/, "");
+    const last = parts.length > 1 ? parts[parts.length - 1] : "";
+    const domain = lead.company.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim().replace(/\s+/g, "") + ".com";
+    return last ? `${first}.${last}@${domain}` : `${first}@${domain}`;
+  }
+
   function currentICP() {
     return {
       targetCompanySizes: activeValues(sizeChips),
@@ -418,14 +431,18 @@
         outreachList.innerHTML = "";
         drafts.forEach((d) => {
           const lead = byId[d.leadId];
+          const email = inferEmail(lead);
+          const mailtoHref = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(d.subject)}&body=${encodeURIComponent(d.body)}`;
           const card = document.createElement("div");
           card.className = "lead-card";
           card.style.gridTemplateColumns = "1fr";
           card.innerHTML = `
             <div>
               <div class="lead-name">${lead.name} · ${lead.company} <span class="source-tag">${d.source}</span></div>
+              <div class="lead-meta" style="margin-top:4px">To: ${email} <span class="source-tag" title="No verified email on file — inferred from name/company for this draft">inferred, unverified</span></div>
               <div class="lead-meta" style="margin-top:8px; font-weight:600; color:var(--text)">${d.subject}</div>
               <div class="lead-meta" style="margin-top:6px; white-space:pre-wrap">${d.body}</div>
+              <a class="shortlist-btn" style="display:inline-block; margin-top:10px; text-decoration:none" href="${mailtoHref}">Send email →</a>
             </div>
           `;
           outreachList.appendChild(card);
