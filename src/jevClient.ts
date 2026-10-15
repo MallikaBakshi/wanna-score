@@ -73,10 +73,12 @@ async function fetchWithRetry(lead: Lead, icp: ICP): Promise<any> {
             company: lead.company,
             company_size: lead.companySize,
             industry: lead.industry,
+            annual_revenue: lead.annualRevenue,
             is_decision_maker: String(lead.isDecisionMaker),
             has_active_ai_project: String(lead.hasActiveAIProject),
             icp_target_sizes: icp.targetCompanySizes.join(", "),
             icp_target_industries: icp.targetIndustries.join(", "),
+            icp_target_revenue: icp.targetRevenueRanges.join(", "),
             icp_requires_decision_maker: String(icp.requireDecisionMaker),
           },
           questions: {
@@ -84,9 +86,9 @@ async function fetchWithRetry(lead: Lead, icp: ICP): Promise<any> {
               type: "choice",
               instructions: "Given this lead's profile and the target ICP, how good a match is this lead?",
               criteria: {
-                "strong-match": "Company size and industry fit the ICP, and the role satisfies the decision-maker requirement.",
-                "possible-match": "Partially fits the ICP (e.g. right industry but borderline size, or role unclear).",
-                "poor-match": "Does not fit the ICP on size, industry, or decision-maker requirement.",
+                "strong-match": "Company size, industry, and revenue fit the ICP, and the role satisfies the decision-maker requirement.",
+                "possible-match": "Partially fits the ICP (e.g. right industry but borderline size/revenue, or role unclear).",
+                "poor-match": "Does not fit the ICP on size, industry, revenue, or decision-maker requirement.",
               },
             },
           },
@@ -142,6 +144,7 @@ function deriveMatchReasons(lead: Lead, icp: ICP): string[] {
   const reasons: string[] = [];
   if (icp.targetCompanySizes.includes(lead.companySize)) reasons.push("Company size match");
   if (icp.targetIndustries.includes(lead.industry)) reasons.push("Industry match");
+  if (icp.targetRevenueRanges.includes(lead.annualRevenue)) reasons.push("Revenue match");
   if (!icp.requireDecisionMaker || lead.isDecisionMaker) reasons.push("Decision-maker role");
   if (lead.hasActiveAIProject) reasons.push("Active AI project");
   return reasons;

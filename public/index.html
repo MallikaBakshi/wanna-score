@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Jev ICP Matching</title>
+<title>TrueHorizon · ICP Matching</title>
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #0b0d12;
-    --panel: #151823;
-    --border: #262b3a;
+    --bg: #0a0e14;
+    --panel: #121822;
+    --border: #22303f;
     --text: #e8eaf0;
     --muted: #8b90a3;
-    --accent: #3ddcc4;
+    --accent: #2dd4bf;
     --strong: #3ddc84;
     --possible: #ffb020;
     --poor: #ff5c5c;
@@ -26,6 +26,15 @@
     padding: 32px 24px 64px;
   }
   .wrap { max-width: 1000px; margin: 0 auto; }
+  .brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .brand-mark {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent), #1a6e63);
+    color: #04121f; font-weight: 800; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-name { font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+  .brand-powered { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; }
   .eyebrow { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
   h1 { font-size: 26px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; max-width: 640px; }
@@ -122,6 +131,11 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="brand-row">
+    <span class="brand-mark">TH</span>
+    <span class="brand-name">TrueHorizon</span>
+    <span class="brand-powered">powered by Jev</span>
+  </div>
   <div class="eyebrow">ICP Matching · Illustrative workflow</div>
   <h1>Score leads against your ICP</h1>
   <p class="sub">Define your ideal customer profile, then Jev scores each lead and keeps the match reasons with it. Leads here are a fictional sample set — plug in your own list the same way.</p>
@@ -136,13 +150,17 @@
       <label>Industry</label>
       <div class="chip-group" id="industry-chips"></div>
 
+      <label>Annual revenue</label>
+      <div class="chip-group" id="revenue-chips"></div>
+
       <label class="check">
-        <input type="checkbox" id="requireDecisionMaker" checked />
+        <input type="checkbox" id="requireDecisionMaker" />
         Require decision-maker role
       </label>
 
       <button class="run" id="run-btn">Score leads</button>
       <button class="run" id="run-bulk-btn" style="margin-top:8px; background:#1b1f2d; color:var(--text); border:1px solid var(--border);">Score all 1000 (stress test)</button>
+      <button class="run" id="outreach-btn" style="margin-top:8px; background:#1b1f2d; color:var(--text); border:1px solid var(--border);" disabled>Draft outreach for score ≥ 80</button>
     </div>
 
     <div class="panel">
@@ -156,6 +174,11 @@
       </div>
     </div>
   </div>
+
+  <div class="panel" id="outreach-panel" style="margin-top:20px" hidden>
+    <h2>Drafted outreach</h2>
+    <div class="leads" id="outreach-list"></div>
+  </div>
 </div>
 
 <script>
@@ -163,34 +186,43 @@
   // (truehorizon.ai/customers) — they sell across many enterprise verticals,
   // not one niche. Chips below are fully editable; this is just the default.
   const SAMPLE_LEADS = [
-    { id: "L1", name: "A. Rivera", title: "VP Tax Technology", company: "Meridian Tax Solutions", companySize: "1000+", industry: "Tax & Compliance", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L2", name: "B. Chen", title: "Head of Localization", company: "Polyglot Media Group", companySize: "201-1000", industry: "Media & Localization", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L3", name: "C. Patel", title: "Recruiting Coordinator", company: "Brightline Staffing", companySize: "11-50", industry: "Recruitment & Staffing", isDecisionMaker: false, hasActiveAIProject: false },
-    { id: "L4", name: "D. Nwosu", title: "Director of Procurement", company: "Fenwick Supply Co.", companySize: "1000+", industry: "Procurement & Supply Chain", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L5", name: "E. Fontaine", title: "VP Operations", company: "Highline Entertainment Venues", companySize: "201-1000", industry: "Entertainment & Hospitality", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L6", name: "F. Osei", title: "Head of AI Automation", company: "Garrison Financial Group", companySize: "1000+", industry: "Financial Services", isDecisionMaker: true, hasActiveAIProject: true },
-    { id: "L7", name: "G. Takahashi", title: "Customer Support Rep", company: "Pawfect Goods Co.", companySize: "201-1000", industry: "Consumer & eCommerce", isDecisionMaker: false, hasActiveAIProject: false },
-    { id: "L8", name: "H. Okafor", title: "Chief Operating Officer", company: "Vireo Enterprise Software", companySize: "1000+", industry: "Enterprise SaaS", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L1", name: "A. Rivera", title: "VP Tax Technology", company: "Meridian Tax Solutions", companySize: "1000+", industry: "Tax & Compliance", annualRevenue: "$1B+", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L2", name: "B. Chen", title: "Head of Localization", company: "Polyglot Media Group", companySize: "201-1000", industry: "Media & Localization", annualRevenue: "$100M-1B", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L3", name: "C. Patel", title: "Recruiting Coordinator", company: "Brightline Staffing", companySize: "11-50", industry: "Recruitment & Staffing", annualRevenue: "<$10M", isDecisionMaker: false, hasActiveAIProject: false },
+    { id: "L4", name: "D. Nwosu", title: "Director of Procurement", company: "Fenwick Supply Co.", companySize: "1000+", industry: "Procurement & Supply Chain", annualRevenue: "$1B+", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L5", name: "E. Fontaine", title: "VP Operations", company: "Highline Entertainment Venues", companySize: "201-1000", industry: "Entertainment & Hospitality", annualRevenue: "$100M-1B", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L6", name: "F. Osei", title: "Head of AI Automation", company: "Garrison Financial Group", companySize: "1000+", industry: "Financial Services", annualRevenue: "$1B+", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L7", name: "G. Takahashi", title: "Customer Support Rep", company: "Pawfect Goods Co.", companySize: "201-1000", industry: "Consumer & eCommerce", annualRevenue: "$10M-100M", isDecisionMaker: false, hasActiveAIProject: false },
+    { id: "L8", name: "H. Okafor", title: "Chief Operating Officer", company: "Vireo Enterprise Software", companySize: "1000+", industry: "Enterprise SaaS", annualRevenue: "$1B+", isDecisionMaker: true, hasActiveAIProject: true },
   ];
 
   const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"];
-  const INDUSTRIES = ["Tax & Compliance", "Media & Localization", "Recruitment & Staffing", "Procurement & Supply Chain", "Entertainment & Hospitality", "Financial Services", "Consumer & eCommerce", "Enterprise SaaS"];
-  const DEFAULT_SIZES = ["201-1000", "1000+"];
-  const DEFAULT_INDUSTRIES = ["Tax & Compliance", "Media & Localization", "Recruitment & Staffing", "Procurement & Supply Chain", "Entertainment & Hospitality", "Financial Services", "Enterprise SaaS"];
+  const INDUSTRIES = ["Tax & Compliance", "Media & Localization", "Recruitment & Staffing", "Procurement & Supply Chain", "Entertainment & Hospitality", "Financial Services", "Enterprise SaaS", "Healthcare", "Legal Services", "Manufacturing", "Retail", "Energy & Utilities", "Consumer & eCommerce"];
+  const REVENUE = ["<$10M", "$10M-100M", "$100M-1B", "$1B+"];
+  const DEFAULT_SIZES = ["51-200", "201-1000", "1000+"];
+  const DEFAULT_INDUSTRIES = ["Tax & Compliance", "Media & Localization", "Recruitment & Staffing", "Procurement & Supply Chain", "Entertainment & Hospitality", "Financial Services", "Enterprise SaaS", "Healthcare", "Legal Services", "Manufacturing", "Retail", "Energy & Utilities"];
+  const DEFAULT_REVENUE = ["$10M-100M", "$100M-1B", "$1B+"];
 
   const sizeChips = document.getElementById("size-chips");
   const industryChips = document.getElementById("industry-chips");
+  const revenueChips = document.getElementById("revenue-chips");
   const leadsEl = document.getElementById("leads");
   const countEl = document.getElementById("count");
   const statsBar = document.getElementById("stats-bar");
   const runBtn = document.getElementById("run-btn");
   const runBulkBtn = document.getElementById("run-bulk-btn");
+  const outreachBtn = document.getElementById("outreach-btn");
+  const outreachPanel = document.getElementById("outreach-panel");
+  const outreachList = document.getElementById("outreach-list");
   const shortlisted = new Set();
+  let lastLeads = [];
+  let lastScores = [];
 
   function currentICP() {
     return {
       targetCompanySizes: activeValues(sizeChips),
       targetIndustries: activeValues(industryChips),
+      targetRevenueRanges: activeValues(revenueChips),
       requireDecisionMaker: document.getElementById("requireDecisionMaker").checked,
     };
   }
@@ -221,6 +253,7 @@
   }
   makeChips(sizeChips, SIZES, DEFAULT_SIZES);
   makeChips(industryChips, INDUSTRIES, DEFAULT_INDUSTRIES);
+  makeChips(revenueChips, REVENUE, DEFAULT_REVENUE);
 
   function activeValues(container) {
     return [...container.querySelectorAll(".chip.active")].map((c) => c.dataset.value);
@@ -251,7 +284,7 @@
         <div class="score ${s.category}">${s.score}<small>/100</small></div>
         <div>
           <div class="lead-name">${lead.name} · ${lead.title}</div>
-          <div class="lead-meta">${lead.company} · ${lead.companySize} · ${lead.industry}</div>
+          <div class="lead-meta">${lead.company} · ${lead.companySize} · ${lead.industry} · ${lead.annualRevenue}</div>
           <div class="reasons">${s.matchReasons.map((r) => `<span class="reason-tag">${r}</span>`).join("")}</div>
           <div class="source-tag">${s.source} · ${s.latencyMs}ms</div>
         </div>
@@ -288,6 +321,9 @@
       });
       if (!res.ok) throw new Error((await res.json()).message || res.statusText);
       const scores = await res.json();
+      lastLeads = SAMPLE_LEADS;
+      lastScores = scores;
+      outreachBtn.disabled = false;
       renderStats(SAMPLE_LEADS, scores, (performance.now() - start) / 1000);
       renderLeads(SAMPLE_LEADS, scores);
     } catch (err) {
@@ -325,6 +361,9 @@
       const scores = await res.json();
 
       clearInterval(tick);
+      lastLeads = leads;
+      lastScores = scores;
+      outreachBtn.disabled = false;
       renderStats(leads, scores, (performance.now() - start) / 1000);
       renderLeads(leads, scores, 200);
     } catch (err) {
@@ -333,6 +372,51 @@
     } finally {
       runBulkBtn.disabled = false;
       runBtn.disabled = false;
+    }
+  });
+
+  outreachBtn.addEventListener("click", async () => {
+    outreachBtn.disabled = true;
+    outreachBtn.textContent = "Drafting…";
+    outreachPanel.hidden = false;
+    outreachList.innerHTML = `<div class="empty">Drafting outreach with Claude…</div>`;
+
+    const byId = Object.fromEntries(lastLeads.map((l) => [l.id, l]));
+    const qualified = lastScores.filter((s) => s.score >= 80);
+
+    try {
+      const res = await fetch("/api/generate-outreach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads: qualified.map((s) => byId[s.leadId]), scores: qualified }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || res.statusText);
+      const drafts = await res.json();
+
+      if (drafts.length === 0) {
+        outreachList.innerHTML = `<div class="empty">No leads scored ≥ 80 yet — widen your ICP or run "Score all 1000".</div>`;
+      } else {
+        outreachList.innerHTML = "";
+        drafts.forEach((d) => {
+          const lead = byId[d.leadId];
+          const card = document.createElement("div");
+          card.className = "lead-card";
+          card.style.gridTemplateColumns = "1fr";
+          card.innerHTML = `
+            <div>
+              <div class="lead-name">${lead.name} · ${lead.company} <span class="source-tag">${d.source}</span></div>
+              <div class="lead-meta" style="margin-top:8px; font-weight:600; color:var(--text)">${d.subject}</div>
+              <div class="lead-meta" style="margin-top:6px; white-space:pre-wrap">${d.body}</div>
+            </div>
+          `;
+          outreachList.appendChild(card);
+        });
+      }
+    } catch (err) {
+      outreachList.innerHTML = `<div class="empty" style="color:var(--poor)">Error: ${err.message}</div>`;
+    } finally {
+      outreachBtn.disabled = false;
+      outreachBtn.textContent = "Draft outreach for score ≥ 80";
     }
   });
 </script>

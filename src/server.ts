@@ -3,8 +3,9 @@ import express from "express";
 import path from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { ScoreLeadsRequest, Lead } from "./types.js";
+import type { ScoreLeadsRequest, Lead, ScoreResult } from "./types.js";
 import { scoreLeadsBatched } from "./jevClient.js";
+import { draftOutreachBatch } from "./claudeClient.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -40,6 +41,25 @@ app.get("/api/leads/generated", (_req, res) => {
   }
   const leads: Lead[] = JSON.parse(readFileSync(filePath, "utf-8"));
   res.json(leads);
+});
+
+// Drafts outreach emails (Claude) for leads the UI has already filtered to
+// score >= 80 — generation is kept off the hot path, only called for
+// leads Jev already decided are worth a human's attention.
+app.post("/api/generate-outreach", async (req, res) => {
+  const { leads, scores } = req.body as { leads: Lead[]; scores: ScoreResult[] };
+
+  if (!Array.isArray(leads) || !Array.isArray(scores)) {
+    return res.status(400).json({ error: "leads[] and scores[] are required" });
+  }
+
+  try {
+    const drafts = await draftOutreachBatch(leads, scores);
+    res.json(drafts);
+  } catch (err) {
+    console.error("[server] Outreach drafting failed:", err);
+    res.status(500).json({ error: "Outreach drafting failed", message: (err as Error).message });
+  }
 });
 
 app.listen(PORT, () => {

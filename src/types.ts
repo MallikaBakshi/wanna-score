@@ -7,6 +7,7 @@ export type Lead = {
   company: string;
   companySize: "1-10" | "11-50" | "51-200" | "201-1000" | "1000+";
   industry: string;
+  annualRevenue: "<$10M" | "$10M-100M" | "$100M-1B" | "$1B+";
   isDecisionMaker: boolean;
   hasActiveAIProject: boolean;
 };
@@ -14,6 +15,7 @@ export type Lead = {
 export type ICP = {
   targetCompanySizes: Lead["companySize"][];
   targetIndustries: string[];
+  targetRevenueRanges: Lead["annualRevenue"][];
   requireDecisionMaker: boolean;
 };
 
