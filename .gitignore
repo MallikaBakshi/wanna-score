@@ -3,3 +3,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Real person data from Crustdata — licensed/PII, never goes in a public repo.
+data/leads-crustdata*.json

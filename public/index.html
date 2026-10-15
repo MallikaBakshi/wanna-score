@@ -160,7 +160,7 @@
 
       <button class="run" id="run-btn">Score leads</button>
       <button class="run" id="run-bulk-btn" style="margin-top:8px; background:#1b1f2d; color:var(--text); border:1px solid var(--border);">Score all 1000 (stress test)</button>
-      <button class="run" id="outreach-btn" style="margin-top:8px; background:#1b1f2d; color:var(--text); border:1px solid var(--border);" disabled>Draft outreach for score ≥ 80</button>
+      <button class="run" id="outreach-btn" style="margin-top:8px; background:#1b1f2d; color:var(--text); border:1px solid var(--border);">Draft outreach for score ≥ 80</button>
     </div>
 
     <div class="panel">
@@ -379,12 +379,31 @@
     outreachBtn.disabled = true;
     outreachBtn.textContent = "Drafting…";
     outreachPanel.hidden = false;
+    outreachPanel.scrollIntoView({ behavior: "smooth", block: "start" });
     outreachList.innerHTML = `<div class="empty">Drafting outreach with Claude…</div>`;
 
-    const byId = Object.fromEntries(lastLeads.map((l) => [l.id, l]));
-    const qualified = lastScores.filter((s) => s.score >= 80);
-
     try {
+      // If nothing's been scored yet, score the sample leads first so this
+      // button works standalone regardless of click order.
+      if (lastScores.length === 0) {
+        outreachList.innerHTML = `<div class="empty">Scoring leads first…</div>`;
+        const icp = currentICP();
+        const scoreRes = await fetch("/api/score-leads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leads: SAMPLE_LEADS, icp }),
+        });
+        if (!scoreRes.ok) throw new Error((await scoreRes.json()).message || scoreRes.statusText);
+        lastLeads = SAMPLE_LEADS;
+        lastScores = await scoreRes.json();
+        renderStats(lastLeads, lastScores, 0);
+        renderLeads(lastLeads, lastScores);
+        outreachList.innerHTML = `<div class="empty">Drafting outreach with Claude…</div>`;
+      }
+
+      const byId = Object.fromEntries(lastLeads.map((l) => [l.id, l]));
+      const qualified = lastScores.filter((s) => s.score >= 80);
+
       const res = await fetch("/api/generate-outreach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
