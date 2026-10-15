@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jev ICP Matching</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0b0d12;
+    --panel: #151823;
+    --border: #262b3a;
+    --text: #e8eaf0;
+    --muted: #8b90a3;
+    --accent: #3ddcc4;
+    --strong: #3ddc84;
+    --possible: #ffb020;
+    --poor: #ff5c5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 32px 24px 64px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  .eyebrow { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; max-width: 640px; }
+  .grid { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  label:first-of-type { margin-top: 0; }
+  .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    color: var(--muted);
+    background: #0e1016;
+  }
+  .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(61,220,196,.1); }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-top: 14px; }
+  button.run {
+    margin-top: 18px;
+    width: 100%;
+    padding: 11px;
+    background: var(--accent);
+    color: #04121f;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button.run:disabled { opacity: .5; cursor: default; }
+  .results-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .count { font-size: 13px; color: var(--muted); }
+  .leads { display: flex; flex-direction: column; gap: 10px; }
+  .lead-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: #10121b;
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    animation: in .25s ease;
+  }
+  @keyframes in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .score {
+    font-size: 20px;
+    font-weight: 700;
+    text-align: center;
+  }
+  .score small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; }
+  .score.strong-match { color: var(--strong); }
+  .score.possible-match { color: var(--possible); }
+  .score.poor-match { color: var(--poor); }
+  .lead-name { font-weight: 600; font-size: 14px; }
+  .lead-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .reasons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .reason-tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; background: rgba(61,220,196,.1); color: var(--accent); }
+  .shortlist-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: #1b1f2d;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .shortlist-btn.on { border-color: var(--strong); color: var(--strong); background: rgba(61,220,132,.1); }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 60px 0; }
+  .source-tag { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; display: inline-block; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">ICP Matching · Illustrative workflow</div>
+  <h1>Score leads against your ICP</h1>
+  <p class="sub">Define your ideal customer profile, then Jev scores each lead and keeps the match reasons with it. Leads here are a fictional sample set — plug in your own list the same way.</p>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Define ICP</h2>
+
+      <label>Company size</label>
+      <div class="chip-group" id="size-chips"></div>
+
+      <label>Industry</label>
+      <div class="chip-group" id="industry-chips"></div>
+
+      <label class="check">
+        <input type="checkbox" id="requireDecisionMaker" checked />
+        Require decision-maker role
+      </label>
+
+      <button class="run" id="run-btn">Score leads</button>
+    </div>
+
+    <div class="panel">
+      <div class="results-top">
+        <h2 style="margin:0">Leads</h2>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="leads" id="leads">
+        <div class="empty">Define your ICP and click "Score leads" to begin.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SAMPLE_LEADS = [
+    { id: "L1", name: "A. Rivera", title: "VP Engineering", company: "Northstar Labs", companySize: "51-200", industry: "AI/ML", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L2", name: "B. Chen", title: "Head of Product", company: "Cedar Cloud", companySize: "201-1000", industry: "Cloud Infra", isDecisionMaker: true, hasActiveAIProject: true },
+    { id: "L3", name: "C. Patel", title: "Marketing Associate", company: "Brightline Media", companySize: "11-50", industry: "Media", isDecisionMaker: false, hasActiveAIProject: false },
+    { id: "L4", name: "D. Nwosu", title: "CTO", company: "Fenwick Robotics", companySize: "11-50", industry: "Robotics", isDecisionMaker: true, hasActiveAIProject: true },
+  ];
+
+  const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"];
+  const INDUSTRIES = ["AI/ML", "Cloud Infra", "Robotics", "Media", "Fintech", "Healthcare"];
+  const DEFAULT_SIZES = ["11-50", "51-200", "201-1000"];
+  const DEFAULT_INDUSTRIES = ["AI/ML", "Cloud Infra", "Robotics"];
+
+  const sizeChips = document.getElementById("size-chips");
+  const industryChips = document.getElementById("industry-chips");
+  const leadsEl = document.getElementById("leads");
+  const countEl = document.getElementById("count");
+  const runBtn = document.getElementById("run-btn");
+  const shortlisted = new Set();
+
+  function makeChips(container, values, defaults) {
+    values.forEach((v) => {
+      const chip = document.createElement("div");
+      chip.className = "chip" + (defaults.includes(v) ? " active" : "");
+      chip.textContent = v;
+      chip.dataset.value = v;
+      chip.addEventListener("click", () => chip.classList.toggle("active"));
+      container.appendChild(chip);
+    });
+  }
+  makeChips(sizeChips, SIZES, DEFAULT_SIZES);
+  makeChips(industryChips, INDUSTRIES, DEFAULT_INDUSTRIES);
+
+  function activeValues(container) {
+    return [...container.querySelectorAll(".chip.active")].map((c) => c.dataset.value);
+  }
+
+  function renderLeads(leads, scores) {
+    leadsEl.innerHTML = "";
+    const byId = Object.fromEntries(scores.map((s) => [s.leadId, s]));
+    const sorted = [...leads].sort((a, b) => (byId[b.id]?.score ?? 0) - (byId[a.id]?.score ?? 0));
+
+    countEl.textContent = `${leads.length} leads scored`;
+
+    sorted.forEach((lead) => {
+      const s = byId[lead.id];
+      const card = document.createElement("div");
+      card.className = "lead-card";
+      const isShortlisted = shortlisted.has(lead.id);
+      card.innerHTML = `
+        <div class="score ${s.category}">${s.score}<small>/100</small></div>
+        <div>
+          <div class="lead-name">${lead.name} · ${lead.title}</div>
+          <div class="lead-meta">${lead.company} · ${lead.companySize} · ${lead.industry}</div>
+          <div class="reasons">${s.matchReasons.map((r) => `<span class="reason-tag">${r}</span>`).join("")}</div>
+          <div class="source-tag">${s.source} · ${s.latencyMs}ms</div>
+        </div>
+        <button class="shortlist-btn ${isShortlisted ? "on" : ""}" data-id="${lead.id}">${isShortlisted ? "✓ Shortlisted" : "Shortlist"}</button>
+      `;
+      card.querySelector(".shortlist-btn").addEventListener("click", (e) => {
+        if (shortlisted.has(lead.id)) {
+          shortlisted.delete(lead.id);
+          e.target.classList.remove("on");
+          e.target.textContent = "Shortlist";
+        } else {
+          shortlisted.add(lead.id);
+          e.target.classList.add("on");
+          e.target.textContent = "✓ Shortlisted";
+        }
+      });
+      leadsEl.appendChild(card);
+    });
+  }
+
+  runBtn.addEventListener("click", async () => {
+    runBtn.disabled = true;
+    runBtn.textContent = "Scoring…";
+
+    const icp = {
+      targetCompanySizes: activeValues(sizeChips),
+      targetIndustries: activeValues(industryChips),
+      requireDecisionMaker: document.getElementById("requireDecisionMaker").checked,
+    };
+
+    try {
+      const res = await fetch("/api/score-leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads: SAMPLE_LEADS, icp }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || res.statusText);
+      const scores = await res.json();
+      renderLeads(SAMPLE_LEADS, scores);
+    } catch (err) {
+      leadsEl.innerHTML = `<div class="empty" style="color:var(--poor)">Error: ${err.message}</div>`;
+    } finally {
+      runBtn.disabled = false;
+      runBtn.textContent = "Score leads";
+    }
+  });
+</script>
+</body>
+</html>
