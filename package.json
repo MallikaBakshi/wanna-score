@@ -1,0 +1,21 @@
+{
+  "name": "jev-lead-scorer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "mock": "tsx src/mockServer.ts",
+    "start": "tsx src/server.ts",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
